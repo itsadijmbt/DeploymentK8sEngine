@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
@@ -49,8 +51,10 @@ func (d *Daemon) Worker() {
 	}
 }
 
-//service locker
-
+// service map + dependency locker
+// protects the service map data structure itself
+// protects the value associated with each key,
+// each key gets its own independent lock
 func (d *Daemon) getServiceLocker(service string) *sync.Mutex {
 	d.locksMutex.Lock()
 	defer d.locksMutex.Unlock()
@@ -66,7 +70,7 @@ func (d *Daemon) watchFiles() {
 
 	watcher, _ := fsnotify.NewWatcher()
 	//add the file engine
-	watcher.Add("")
+	watcher.Add("/Users/win 10/Desktop/GO/K8sEngine/deps")
 
 	//creating a channel for concurrent deps
 	for event := range watcher.Events {
@@ -83,7 +87,7 @@ func (d *Daemon) watchFiles() {
 func (d *Daemon) DeployService(job DeployService) {
 
 	//get the lock for the service
-	lock := d.getLock(job.service)
+	lock := d.getServiceLocker(job.service)
 
 	//lock the service
 	lock.Lock()
@@ -100,5 +104,16 @@ func (d *Daemon) DeployService(job DeployService) {
 	if newVersion != currentVersion {
 		d.jobs <- DeployService{service: job.service, version: newVersion}
 	}
+
+}
+
+func readFile(filepath string) string {
+
+	content, err := os.ReadFile(filepath)
+
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
 
 }
