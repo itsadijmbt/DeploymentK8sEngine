@@ -1,8 +1,14 @@
 package main
 
-func DeployTok8s(serviceName string, version string){
+import (
+	"fmt"
+	"time"
+)
 
-		//core k8s api's
+// complete file path | docker version | namespace
+func DeployTok8s(filepath string, dockerImageVersion string, namespace string) {
 
-		
-}	
+	//core k8s api's
+	fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
+	time.Sleep(10 * time.Second)
+}

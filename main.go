@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -18,8 +19,9 @@ type Daemon struct {
 }
 
 type DeployService struct {
-	service string
-	version string
+	service   string
+	version   string
+	namespace string
 }
 
 // initlaise a new daemon
@@ -77,9 +79,10 @@ func (d *Daemon) watchFiles() {
 		if event.Op&fsnotify.Write == fsnotify.Write {
 
 			service := event.Name
-			version := readFile(service)
 
-			d.jobs <- DeployService{service: service, version: version}
+			version, namespace := readFile(service)
+
+			d.jobs <- DeployService{service: service, version: version, namespace: namespace}
 		}
 	}
 }
@@ -93,27 +96,47 @@ func (d *Daemon) DeployService(job DeployService) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	//getting cwv
-	currentVersion := readFile(job.service)
+	fmt.Printf("[DEPLOY] Processing: %s\n", job.service)
 
-	DeployTok8s(job.service, currentVersion)
+	depFile := job.service
+	lastfile := strings.Replace(depFile, ".dep", ".last", 1)
 
-	// for concurrnet redeployement if file changed in between
-	newVersion := readFile(job.service)
+	newVersion, newNamespace := readFile(job.service)
+	lastVersion, lastNamespace := readFile(lastfile)
 
-	if newVersion != currentVersion {
-		d.jobs <- DeployService{service: job.service, version: newVersion}
+	fmt.Printf("[COMPARE] New: %s/%s | Last: %s/%s\n",
+		newNamespace, newVersion, lastNamespace, lastVersion)
+
+	if newVersion != lastVersion || newNamespace != lastNamespace {
+		fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
+
+		DeployTok8s(depFile, newVersion, newNamespace)
+		content := newVersion + " " + newNamespace
+		os.WriteFile(lastfile, []byte(content), 0644)
+		fmt.Println("[SAVED] Updated .last file")
+	} else {
+		fmt.Println("[SKIP] No changes detected")
+	}
+
+	//re check for new file
+	currentVersion, currNamespace := readFile(depFile)
+	if newVersion != currentVersion || newNamespace != currNamespace {
+		d.jobs <- DeployService{service: job.service, version: newVersion, namespace: job.namespace}
 	}
 
 }
 
-func readFile(filepath string) string {
-
+func readFile(filepath string) (string, string) {
 	content, err := os.ReadFile(filepath)
-
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return strings.TrimSpace(string(content))
 
+	parts := strings.Split(strings.TrimSpace(string(content)), " ")
+
+	if len(parts) != 2 {
+		return "", ""
+	}
+
+	return parts[0], parts[1]
 }
