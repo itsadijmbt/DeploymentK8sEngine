@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	"k8s.io/client-go/kubernetes"
 )
 
 type Daemon struct {
@@ -16,6 +17,7 @@ type Daemon struct {
 	// protects service map from races
 	locksMutex sync.Mutex
 	jobs       chan DeployService
+	k8sClient  *kubernetes.Clientset
 }
 
 type DeployService struct {
@@ -28,9 +30,18 @@ type DeployService struct {
 
 func NewDaemon(worker int) *Daemon {
 
+	// create a new k8s client
+	k8sClient, err := Newk8sclient()
+
+	if err != nil {
+		fmt.Printf("Error creating k8s client: %v\n", err)
+		os.Exit(1)
+	}
+
 	d := &Daemon{
 		serviceLocks: make(map[string]*sync.Mutex),
 		jobs:         make(chan DeployService, 500),
+		k8sClient:    k8sClient,
 	}
 
 	for i := 0; i < worker; i++ {
@@ -110,7 +121,7 @@ func (d *Daemon) DeployService(job DeployService) {
 	if newVersion != lastVersion || newNamespace != lastNamespace {
 		fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
 
-		DeployTok8s(depFile, newVersion, newNamespace)
+		d.DeployTok8s(depFile, newVersion, newNamespace)
 		content := newVersion + " " + newNamespace
 		os.WriteFile(lastfile, []byte(content), 0644)
 		fmt.Println("[SAVED] Updated .last file")
