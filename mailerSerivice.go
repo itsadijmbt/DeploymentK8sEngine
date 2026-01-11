@@ -20,7 +20,7 @@ const (
 	MsgInternalSysFailure = "internal-system-failure"
 )
 
-func SlackNotifer(message SlackMessage) {
+func SlackNotifier(message SlackMessage) {
 
 	// webhookURL := os.Getenv("SLACK_WEBHOOK_URL")
 
@@ -96,12 +96,11 @@ func buildMessage(msg SlackMessage, color, emoji string) slack.Attachment {
 }
 
 func parseDetails(details string) []slack.AttachmentField {
-
 	if details == "" {
 		return []slack.AttachmentField{}
 	}
 
-	feilds := []slack.AttachmentField{}
+	fields := []slack.AttachmentField{}
 	lines := strings.Split(details, "\n")
 
 	for _, line := range lines {
@@ -114,15 +113,24 @@ func parseDetails(details string) []slack.AttachmentField {
 		if len(parts) != 2 {
 			continue
 		}
+
 		title := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		short := true
 
-		feilds = append(feilds, slack.AttachmentField{
+		title = strings.Title(strings.ToLower(title))
+
+		short := true
+		titleLower := strings.ToLower(title)
+
+		if titleLower == "error" || titleLower == "message" || len(value) > 50 {
+			short = false
+		}
+
+		fields = append(fields, slack.AttachmentField{
 			Title: title,
 			Value: value,
 			Short: short,
 		})
 	}
-	return feilds
+	return fields
 }
