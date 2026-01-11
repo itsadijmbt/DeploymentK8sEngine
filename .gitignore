@@ -1,0 +1,9 @@
+.env
+.env.local
+.env.*.local
+*.exe
+main
+deployment-daemon
+.vscode/
+.idea/
+.DS_Store
