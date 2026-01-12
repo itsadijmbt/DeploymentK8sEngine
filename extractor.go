@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -40,17 +43,66 @@ func Newk8sclient() (*kubernetes.Clientset, error) {
 
 }
 
+func getECR() string {
+	ecr := os.Getenv("ECR_REPO")
+
+	if ecr == "" {
+		fmt.Println("ECR_URL not set in env variables")
+	}
+	return ecr
+}
+
 // complete file path | docker version | namespace
-func (d *Daemon) DeployTok8s(filepath string, dockerImageVersion string, namespace string) {
+func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, namespace string) error {
+
+	// get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec ->  apply
 
 	//core k8s api's
 	fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
 
-	// deployments, err := d.k8sClient.AppsV1().Deployments(namespace).List(context.TODO(), metav1.ListOptions{})
-	// if err != nil {
-	// 	fmt.Printf(" [ERROR] Failed to list deployments: %v\n", err)
-	// 	return
-	// }
+	ecrRepo := getECR()
 
-	// fmt.Printf("[K8S] Found %d deployments in namespace '%s'\n", len(deployments.Items), namespace)
+	fmt.Printf(">>> ECR REPO LINK IS %s", ecrRepo)
+
+	var fullImage string
+
+	if ecrRepo != "" {
+		fullImage = fmt.Sprintf("%s:%s", ecrRepo, dockerImageVersion)
+	} else {
+		fullImage = dockerImageVersion // Use as-is if no ECR
+	}
+
+	log.Printf(" Full image : %s", fullImage)
+
+	// get deps for this ns
+
+	deploymentsClient := d.k8sClient.AppsV1().Deployments(namespace)
+	ctx := context.TODO()
+
+	// curr dep
+
+	deployment, err := deploymentsClient.Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	// update the dep in spec
+
+	if len(deployment.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("no containers found in deployment %s", serviceName)
+	}
+
+	//update
+	oldImage := deployment.Spec.Template.Spec.Containers[0].Image
+	deployment.Spec.Template.Spec.Containers[0].Image = fullImage
+
+	log.Printf("🔄 Updating image: %s → %s", oldImage, fullImage)
+
+	// now apply
+
+	_, err = deploymentsClient.Update(ctx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }

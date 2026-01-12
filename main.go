@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -129,7 +130,11 @@ func (d *Daemon) DeployService(job DeployService) {
 	if newVersion != lastVersion || newNamespace != lastNamespace {
 		fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
 
-		d.DeployTok8s(depFile, newVersion, newNamespace)
+		serviceName := extractServiceName(depFile)
+		err := d.DeployTok8s(serviceName, newVersion, newNamespace)
+
+		slackengine(err, serviceName, newVersion, newNamespace)
+
 		content := newVersion + " " + newNamespace
 		os.WriteFile(lastfile, []byte(content), 0644)
 		fmt.Println("[SAVED] Updated .last file")
@@ -158,4 +163,46 @@ func readFile(filepath string) (string, string) {
 	}
 
 	return parts[0], parts[1]
+}
+
+func slackengine(err error, serviceName string, newVersion string, newNamespace string) {
+
+	if err != nil {
+
+		log.Printf("❌ Deployment failed: %v", err)
+
+		SlackNotifier(SlackMessage{
+			Message: "Deployment Failed",
+			Details: fmt.Sprintf(
+				"service:%s\nversion:%s\nnamespace:%s\nerror:%s",
+				serviceName,
+				newVersion,
+				newNamespace,
+				err.Error(),
+			),
+			MessageType: MsgDeploymentFailure,
+		})
+	} else {
+
+		log.Printf("✅ Deployment succeeded")
+
+		SlackNotifier(SlackMessage{
+			Message: "Deployment Successful",
+			Details: fmt.Sprintf(
+				"service:%s\nversion:%s\nnamespace:%s",
+				serviceName,
+				newVersion,
+				newNamespace,
+			),
+			MessageType: MsgDeploymentSuccess,
+		})
+	}
+}
+func extractServiceName(filePath string) string {
+
+	filename := filepath.Base(filePath)
+
+	serviceName := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	return serviceName
 }
