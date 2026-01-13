@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -58,11 +60,13 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 	// get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec ->  apply
 
 	//core k8s api's
-	fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
+	// fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
 
 	ecrRepo := getECR()
 
-	fmt.Printf(">>> ECR REPO LINK IS %s", ecrRepo)
+	// fmt.Printf(">>> ECR REPO LINK IS %s", ecrRepo)
+
+	//!!!!!!!! note now since filename is changed we have to change image extraction
 
 	var fullImage string
 
@@ -74,15 +78,24 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 
 	log.Printf(" Full image : %s", fullImage)
 
+	//ensure the ns exists and if not create a new
+
+	// err := d.ensureNs(namespace)
+	// if err != nil {
+	// 	log.Printf(" namespace error  in extractor.go \n ")
+	// 	return err
+	// }
+
 	// get deps for this ns
 
 	deploymentsClient := d.k8sClient.AppsV1().Deployments(namespace)
 	ctx := context.TODO()
 
-	// curr dep
+	// curr dep from this ns
 
 	deployment, err := deploymentsClient.Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
+		log.Printf(" failed to get deployements error  in extractor.go \n ")
 		return err
 	}
 
@@ -101,8 +114,46 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 	// now apply
 
 	_, err = deploymentsClient.Update(ctx, deployment, metav1.UpdateOptions{})
+
 	if err != nil {
+		log.Printf(" deployment error  in extractor.go \n ")
 		return err
 	}
 	return nil
+}
+
+//k8s will not check for health we have to create a service for hat
+
+// k8s has to create a namepsace if it is not present
+func (d *Daemon) ensureNs(namespace string) error {
+
+	ctx := context.TODO()
+
+	_, err := d.k8sClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+
+	if err == nil {
+		// Namespace exists
+		return nil
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		log.Printf(" system error  in extractor.go \n ")
+		return fmt.Errorf("System Error\n")
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+
+	_, err = d.k8sClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+
+	if err != nil {
+		log.Printf(" namespace creation error  in extractor.go \n ")
+		return fmt.Errorf("Failed to create namespace %s: %v", namespace, err)
+	}
+
+	return nil
+
 }

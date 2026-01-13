@@ -96,11 +96,12 @@ func (d *Daemon) watchFiles() {
 
 	//creating a channel for concurrent deps
 	for event := range watcher.Events {
-		if event.Op&fsnotify.Write == fsnotify.Write {
+		if event.Op&fsnotify.Write == fsnotify.Write && strings.HasSuffix(event.Name, ".dep") {
 
+			//service == filename
 			service := event.Name
-
-			version, namespace := readFile(service)
+			_, namespace := extractServiceName(service)
+			version := readFile(service)
 
 			d.jobs <- DeployService{service: service, version: version, namespace: namespace}
 		}
@@ -116,56 +117,65 @@ func (d *Daemon) DeployService(job DeployService) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	fmt.Printf("[DEPLOY] Processing: %s\n", job.service)
+	// fmt.Printf("[DEPLOY] Processing: %s\n", job.service)
 
 	depFile := job.service
 	lastfile := strings.Replace(depFile, ".dep", ".last", 1)
 
-	newVersion, newNamespace := readFile(job.service)
-	lastVersion, lastNamespace := readFile(lastfile)
+	newVersion := readFile(job.service)
+	lastVersion := readFile(lastfile)
 
-	fmt.Printf("[COMPARE] New: %s/%s | Last: %s/%s\n",
-		newNamespace, newVersion, lastNamespace, lastVersion)
+	// fmt.Printf("[COMPARE] New: %s/%s | Last: %s/%s\n",
+	// 	newNamespace, newVersion, lastNamespace, lastVersion)
 
-	if newVersion != lastVersion || newNamespace != lastNamespace {
-		fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
+	if newVersion != lastVersion {
+		// fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
 
-		serviceName := extractServiceName(depFile)
-		err := d.DeployTok8s(serviceName, newVersion, newNamespace)
+		serviceName, namespace := extractServiceName(depFile)
+		err1 := d.DeployTok8s(serviceName, newVersion, namespace)
 
-		slackengine(err, serviceName, newVersion, newNamespace)
+		if err1 != nil {
+			fmt.Printf("[ERROR] Deployment failed: %v\n", err1)
+			return
+		}
 
-		content := newVersion + " " + newNamespace
-		os.WriteFile(lastfile, []byte(content), 0644)
-		fmt.Println("[SAVED] Updated .last file")
+		err2 := slackengine(err1, serviceName, newVersion, namespace)
+
+		if err2 != nil {
+			//this is the rollback logic
+
+		} else {
+			content := newVersion
+			os.WriteFile(lastfile, []byte(content), 0644)
+		}
+
+		// fmt.Println("[SAVED] Updated .last file")
 	} else {
-		fmt.Println("[SKIP] No changes detected")
+		// fmt.Println("[SKIP] No changes detected")
 	}
 
 	//re check for new file
-	currentVersion, currNamespace := readFile(depFile)
-	if newVersion != currentVersion || newNamespace != currNamespace {
+	currentVersion := readFile(depFile)
+	if newVersion != currentVersion {
 		d.jobs <- DeployService{service: job.service, version: newVersion, namespace: job.namespace}
 	}
 
 }
+func readFile(filepath string) string {
 
-func readFile(filepath string) (string, string) {
 	content, err := os.ReadFile(filepath)
 	if err != nil {
-		return "", ""
+
+		if os.IsNotExist(err) {
+			_ = os.WriteFile(filepath, []byte(""), 0644)
+		}
+		return ""
+
 	}
 
-	parts := strings.Split(strings.TrimSpace(string(content)), " ")
-
-	if len(parts) != 2 {
-		return "", ""
-	}
-
-	return parts[0], parts[1]
+	return strings.TrimSpace(string(content))
 }
-
-func slackengine(err error, serviceName string, newVersion string, newNamespace string) {
+func slackengine(err error, serviceName string, newVersion string, newNamespace string) error {
 
 	if err != nil {
 
@@ -182,6 +192,8 @@ func slackengine(err error, serviceName string, newVersion string, newNamespace 
 			),
 			MessageType: MsgDeploymentFailure,
 		})
+
+		return err
 	} else {
 
 		log.Printf("✅ Deployment succeeded")
@@ -196,13 +208,26 @@ func slackengine(err error, serviceName string, newVersion string, newNamespace 
 			),
 			MessageType: MsgDeploymentSuccess,
 		})
+
+		return nil
 	}
+
 }
-func extractServiceName(filePath string) string {
+
+func extractServiceName(filePath string) (string, string) {
 
 	filename := filepath.Base(filePath)
+	namewithoutExt := strings.TrimSuffix(filename, filepath.Ext(filename))
 
-	serviceName := strings.TrimSuffix(filename, filepath.Ext(filename))
+	parts := strings.Split(namewithoutExt, "_")
 
-	return serviceName
+	if len(parts) != 2 {
+		log.Printf("invalid filename: '%s', expected: {service}_{namespace}.dep", filename)
+		return "", ""
+	}
+
+	service := parts[0]
+	namespace := parts[1]
+
+	return service, namespace
 }
