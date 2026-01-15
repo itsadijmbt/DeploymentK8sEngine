@@ -45,24 +45,29 @@ func Newk8sclient() (*kubernetes.Clientset, error) {
 
 }
 
-func getECR() string {
+func getECR() (string, error) {
 	ecr := os.Getenv("ECR_REPO")
 
 	if ecr == "" {
-		fmt.Println("ECR_URL not set in env variables")
+		return " ", fmt.Errorf("THE ECR_URL is not working")
 	}
-	return ecr
+	return ecr, nil
 }
 
 // complete file path | docker version | namespace
 func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, namespace string) error {
 
-	// get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec ->  apply
+	//1 get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec ->  apply
 
 	//core k8s api's
 	// fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
 
-	ecrRepo := getECR()
+	ecrRepo, err := getECR()
+
+	if err != nil {
+		log.Printf(" ECR REPO LINK ERROR in extractor.go \n ")
+		return err
+	}
 
 	// fmt.Printf(">>> ECR REPO LINK IS %s", ecrRepo)
 
@@ -78,28 +83,37 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 
 	log.Printf(" Full image : %s", fullImage)
 
-	//ensure the ns exists and if not create a new
+	//2 ensure the ns exists and if not create a new
 
-	// err := d.ensureNs(namespace)
-	// if err != nil {
-	// 	log.Printf(" namespace error  in extractor.go \n ")
-	// 	return err
-	// }
+	err1 := d.ensureNs(namespace)
+	if err1 != nil {
+		log.Printf(" namespace error  in extractor.go \n ")
+		return err1
+	}
 
-	// get deps for this ns
+	//3 get deps for this ns
 
 	deploymentsClient := d.k8sClient.AppsV1().Deployments(namespace)
 	ctx := context.TODO()
 
-	// curr dep from this ns
+	//4 curr dep from this ns
 
 	deployment, err := deploymentsClient.Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
-		log.Printf(" failed to get deployements error  in extractor.go \n ")
-		return err
+
+		if err1 == nil {
+			log.Printf("New NameSpace created Kindly create a deployment file in the same ns\n")
+
+			return fmt.Errorf("New NameSpace created Kindly create a deployment file in the same ns\n")
+		} else {
+			log.Printf(" failed to get deployements error  in extractor.go \n ")
+
+			return fmt.Errorf("Failed Deployment in Namespace %s for service%s", namespace, serviceName)
+
+		}
 	}
 
-	// update the dep in spec
+	//5 update the dep in spec
 
 	if len(deployment.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("no containers found in deployment %s", serviceName)
@@ -117,8 +131,11 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 
 	if err != nil {
 		log.Printf(" deployment error  in extractor.go \n ")
-		return err
+		return fmt.Errorf("Erroe while deploying in engine\n")
 	}
+
+	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!HEALTH CHECKS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 	return nil
 }
 

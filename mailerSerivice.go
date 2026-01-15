@@ -18,6 +18,7 @@ const (
 	MsgDeploymentSuccess  = "deployment-success"
 	MsgDeploymentFailure  = "deployment-failure"
 	MsgInternalSysFailure = "internal-system-failure"
+	MsgNameSpaceError = "namepsace-issue";
 )
 
 func SlackNotifier(message SlackMessage) {

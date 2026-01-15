@@ -101,6 +101,7 @@ func (d *Daemon) watchFiles() {
 			//service == filename
 			service := event.Name
 			_, namespace := extractServiceName(service)
+
 			version := readFile(service)
 
 			d.jobs <- DeployService{service: service, version: version, namespace: namespace}
@@ -125,25 +126,25 @@ func (d *Daemon) DeployService(job DeployService) {
 	newVersion := readFile(job.service)
 	lastVersion := readFile(lastfile)
 
+	// the reason we ingore the ns because for a new ns the process is different
+
+	fmt.Printf("file name is is %s\n", depFile)
+	fmt.Printf(" the new version = %s old is = %s\n", newVersion, lastVersion)
+
 	// fmt.Printf("[COMPARE] New: %s/%s | Last: %s/%s\n",
 	// 	newNamespace, newVersion, lastNamespace, lastVersion)
 
 	if newVersion != lastVersion {
 		// fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
 
+		// extract {service-name}_{namsepace}.dep
+
 		serviceName, namespace := extractServiceName(depFile)
 		err1 := d.DeployTok8s(serviceName, newVersion, namespace)
+		slackengine(err1, serviceName, newVersion, namespace)
 
 		if err1 != nil {
 			fmt.Printf("[ERROR] Deployment failed: %v\n", err1)
-			return
-		}
-
-		err2 := slackengine(err1, serviceName, newVersion, namespace)
-
-		if err2 != nil {
-			//this is the rollback logic
-
 		} else {
 			content := newVersion
 			os.WriteFile(lastfile, []byte(content), 0644)
@@ -155,27 +156,29 @@ func (d *Daemon) DeployService(job DeployService) {
 	}
 
 	//re check for new file
+
 	currentVersion := readFile(depFile)
 	if newVersion != currentVersion {
 		d.jobs <- DeployService{service: job.service, version: newVersion, namespace: job.namespace}
 	}
 
 }
-func readFile(filepath string) string {
 
+func readFile(filepath string) string {
 	content, err := os.ReadFile(filepath)
 	if err != nil {
-
 		if os.IsNotExist(err) {
 			_ = os.WriteFile(filepath, []byte(""), 0644)
 		}
 		return ""
-
 	}
 
-	return strings.TrimSpace(string(content))
+	text := strings.TrimSpace(string(content))
+
+	return text
 }
-func slackengine(err error, serviceName string, newVersion string, newNamespace string) error {
+
+func slackengine(err error, serviceName string, newVersion string, newNamespace string) {
 
 	if err != nil {
 
@@ -193,7 +196,6 @@ func slackengine(err error, serviceName string, newVersion string, newNamespace 
 			MessageType: MsgDeploymentFailure,
 		})
 
-		return err
 	} else {
 
 		log.Printf("✅ Deployment succeeded")
@@ -209,7 +211,6 @@ func slackengine(err error, serviceName string, newVersion string, newNamespace 
 			MessageType: MsgDeploymentSuccess,
 		})
 
-		return nil
 	}
 
 }
