@@ -57,7 +57,8 @@ func getECR() (string, error) {
 // complete file path | docker version | namespace
 func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, namespace string) error {
 
-	//1 get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec ->  apply
+	//1 get image name -> get deploys for ns + create a context -> get current dep -> update dep in spec
+	//  ->  apply -> health checks
 
 	//core k8s api's
 	// fmt.Printf(">>> WOULD DEPLOY: %s in namespace %s\n", dockerImageVersion, namespace)
@@ -136,6 +137,12 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 
 	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!HEALTH CHECKS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+	err = d.WaitForRollout(deploymentsClient, serviceName, namespace, 5)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -174,4 +181,3 @@ func (d *Daemon) ensureNs(namespace string) error {
 	return nil
 
 }
-
