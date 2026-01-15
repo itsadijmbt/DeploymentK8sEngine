@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,7 +138,7 @@ func (d *Daemon) DeployTok8s(serviceName string, dockerImageVersion string, name
 
 	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!HEALTH CHECKS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-	err = d.WaitForRollout(deploymentsClient, serviceName, namespace, 5)
+	err = d.WaitForRollout(deploymentsClient, serviceName, namespace, 4*time.Minute)
 
 	if err != nil {
 		return err
