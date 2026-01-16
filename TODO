@@ -19,3 +19,9 @@ file name is is \Users\win 10\Desktop\GO\K8sEngine\deps\nginx-app_test.dep
 6: mapping eror is better to get proper slack messages
 
 7:the rollback logic is asgood since when a deployement fails it does not deltet the old image so the olny thing left is to have a k8s health check and later if deployment has faield rollback the filechanges without triggering a fsnotify even it triggers k8s uses canary ones cause it deploys new and removes old even though same
+
+
+8:!!!!!!!!!!!!!!!!!!!!!!it stucks in the loop of redeployement as it changes the file .dep and not .last which triggers the job again
+
+<!-- 9 -->
+adding the secletor using in healthcheck

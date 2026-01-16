@@ -32,9 +32,9 @@ func (d *Daemon) WaitForRollout(deplyementClients v1.DeploymentInterface, servic
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-
+	tickCount := 0
 	//polling
 
 	for {
@@ -42,29 +42,36 @@ func (d *Daemon) WaitForRollout(deplyementClients v1.DeploymentInterface, servic
 		select {
 
 		case <-ctx.Done():
+			log.Printf("timeout waiting for deployment rollout")
 			return fmt.Errorf("timeout waiting for deployment rollout", timeout)
 
 		case <-ticker.C:
 			// inside channel time to check if a new tick is delivered
-
+			tickCount++
 			deployment, err := deplyementClients.Get(ctx, serviceName, metav1.GetOptions{})
 			if err != nil {
+				log.Printf("failed to get deployement")
 				return fmt.Errorf("failed to get deployment: %w", err)
 			}
 
 			status := deployment.Status
 			desired := *deployment.Spec.Replicas
-
-			if status.UnavailableReplicas > 0 {
-				// i.e some replica are failing
-				podErr := d.checkPodErrors(serviceName, namespace)
-				if podErr != nil {
-					return fmt.Errorf("rollout failed: %w", podErr)
-				}
+			// Log status every 10 seconds
+			if tickCount%5 == 0 {
+				log.Printf(" [%s] Waiting... Updated: %d/%d | Ready: %d/%d | Unavail: %d",
+					serviceName, status.UpdatedReplicas, desired, status.ReadyReplicas, desired, status.UnavailableReplicas)
 			}
 			if status.UpdatedReplicas == desired && status.ReadyReplicas == desired && status.UnavailableReplicas == 0 {
 				// all are upated, all are ready and unavailvble =0
 				return nil
+			}
+
+			if status.UnavailableReplicas > 0 {
+				// i.e some replica are failing
+				podErr := d.checkPodErrors(serviceName, deployment.Spec.Selector)
+				if podErr != nil {
+					return fmt.Errorf("rollout failed: %w", podErr)
+				}
 			}
 
 		}
@@ -72,60 +79,109 @@ func (d *Daemon) WaitForRollout(deplyementClients v1.DeploymentInterface, servic
 }
 
 // pods -> pod-> pod.status.ContainerStatus (containerStatus)-> containerStaus.Status has many states (terminated, waiting )
-func (d *Daemon) checkPodErrors(serviceName string, namespace string) error {
+// func (d *Daemon) checkPodErrors(serviceName string, namespace string) error {
 
-	ctx := context.Background()
+// 	ctx := context.Background()
 
-	pods, err := d.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("app=%s", serviceName),
-	})
+// 	pods, err := d.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+// 		LabelSelector: fmt.Sprintf("app=%s", serviceName),
+// 	})
 
-	if err != nil {
-		// we dont exit might be temporary
-		log.Printf(" Could not list pods: %v", err)
-		return nil
-	}
+// 	if err != nil {
+// 		// we dont exit might be temporary
+// 		log.Printf(" Could not list pods: %v", err)
+// 		return nil
+// 	}
 
-	for _, pod := range pods.Items {
+// 	for _, pod := range pods.Items {
 
-		for _, containerStatus := range pod.Status.ContainerStatuses {
+// 		for _, containerStatus := range pod.Status.ContainerStatuses {
 
-			if containerStatus.State.Waiting != nil {
-				reason := containerStatus.State.Waiting.Reason
-				message := containerStatus.State.Waiting.Message
+// 			if containerStatus.State.Waiting != nil {
+// 				reason := containerStatus.State.Waiting.Reason
+// 				message := containerStatus.State.Waiting.Message
 
-				// image doesn't exist or auth failed
-				if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
-					return fmt.Errorf("image pull failed: %s - %s", reason, message)
-				}
+// 				// image doesn't exist or auth failed
+// 				if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+// 					log.Printf("timeout waiting for deployment rollout")
+// 					return fmt.Errorf("image pull failed: %s - %s", reason, message)
+// 				}
 
-				// Invalid image format
-				if reason == "InvalidImageName" {
-					return fmt.Errorf("invalid image name: %s", message)
-				}
+// 				// Invalid image format
+// 				if reason == "InvalidImageName" {
+// 					return fmt.Errorf("invalid image name: %s", message)
+// 				}
 
-				// Container keeps crashing on startup
-				if reason == "CrashLoopBackOff" {
-					return fmt.Errorf("container crashing repeatedly: %s", message)
-				}
+// 				// Container keeps crashing on startup
+// 				if reason == "CrashLoopBackOff" {
+// 					return fmt.Errorf("container crashing repeatedly: %s", message)
+// 				}
 
-				// Container waiting for other reasons (resources, etc)
-			}
+// 				// Container waiting for other reasons (resources, etc)
+// 			}
 
-			//!nil ie crashed
-			if containerStatus.State.Terminated != nil {
-				exitCode := containerStatus.State.Terminated.ExitCode
+// 			//!nil ie crashed
+// 			if containerStatus.State.Terminated != nil {
+// 				exitCode := containerStatus.State.Terminated.ExitCode
 
-				if exitCode != 0 {
-					return fmt.Errorf("Container Terminated with Code %d: %s,", exitCode, containerStatus.State.Terminated.Message)
-				}
+// 				if exitCode != 0 {
+// 					return fmt.Errorf("Container Terminated with Code %d: %s,", exitCode, containerStatus.State.Terminated.Message)
+// 				}
 
-			}
+// 			}
 
-		}
+// 		}
 
-	}
+// 	}
 
-	return nil
+// 	return nil
 
+// }
+// checkPodErrors now uses the Official Selector from the deployment
+func (d *Daemon) checkPodErrors(namespace string, labelSelector *metav1.LabelSelector) error {
+    ctx := context.Background()
+
+    
+    selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+    if err != nil {
+        return fmt.Errorf("invalid label selector: %v", err)
+    }
+
+    
+    pods, err := d.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+        LabelSelector: selector.String(),
+    })
+
+    if err != nil {
+        log.Printf("Could not list pods: %v", err)
+        return nil
+    }
+
+    // we find 0 pods, something is very wrong (Deployment exists but no pods?)
+    if len(pods.Items) == 0 {
+        // T log will confirm if we were looking for the wrong thing before
+        log.Printf(" Found 0 pods with selector: %s", selector.String())
+        return nil 
+    }
+
+    for _, pod := range pods.Items {
+       
+        for _, containerStatus := range pod.Status.ContainerStatuses {
+            if containerStatus.State.Waiting != nil {
+                reason := containerStatus.State.Waiting.Reason
+                message := containerStatus.State.Waiting.Message
+
+                if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+                    return fmt.Errorf("image pull failed: %s - %s", reason, message)
+                }
+                if reason == "CrashLoopBackOff" {
+                    return fmt.Errorf("crash loop: %s", message)
+                }
+                if reason == "InvalidImageName" {
+                    return fmt.Errorf("invalid image name: %s", message)
+                }
+            }
+        }
+    }
+    return nil
 }

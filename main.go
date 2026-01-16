@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
@@ -89,22 +90,75 @@ func (d *Daemon) getServiceLocker(service string) *sync.Mutex {
 
 // the main engine
 func (d *Daemon) watchFiles() {
+	// 1. Create the watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("Failed to create watcher:", err)
+	}
+	defer watcher.Close()
 
-	watcher, _ := fsnotify.NewWatcher()
-	//add the file engine
-	watcher.Add("/Users/win 10/Desktop/GO/K8sEngine/deps")
+	path := "/Users/win 10/Desktop/GO/K8sEngine/deps"
+	err = watcher.Add(path)
+	if err != nil {
+		log.Fatal("Failed to watch folder:", err)
+	}
+	log.Printf(" Watching path: %s", path)
 
-	//creating a channel for concurrent deps
-	for event := range watcher.Events {
-		if event.Op&fsnotify.Write == fsnotify.Write && strings.HasSuffix(event.Name, ".dep") {
+	lastEventTime := make(map[string]time.Time)
+	var maplock sync.Mutex
 
-			//service == filename
-			service := event.Name
-			_, namespace := extractServiceName(service)
+	for {
+		select {
 
-			version := readFile(service)
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
 
-			d.jobs <- DeployService{service: service, version: version, namespace: namespace}
+			isDep := strings.HasSuffix(event.Name, ".dep")
+			isWrite := event.Op&fsnotify.Write == fsnotify.Write
+			isCreate := event.Op&fsnotify.Create == fsnotify.Create
+
+			if isDep && (isWrite || isCreate) {
+
+				maplock.Lock()
+				lastTime, exists := lastEventTime[event.Name]
+				now := time.Now()
+
+				if exists && now.Sub(lastTime) < 500*time.Millisecond {
+					// Debounce: If less than 500ms, ignore.
+					// (Reduced from 1s to 500ms to feel more responsive to manual edits)
+					maplock.Unlock()
+					continue
+				}
+				lastEventTime[event.Name] = now
+				// manual unlock to prevent deadlock inside a non returning for loop
+				// not uisng defer
+				maplock.Unlock()
+
+				service := event.Name
+				_, namespace, err := extractServiceName(service)
+
+				if err != nil {
+					log.Printf("⚠️ Check filename format: %v", err)
+					continue
+				}
+
+				version := readFile(service)
+				if version == "" {
+					continue
+				}
+
+				// Send job
+				d.jobs <- DeployService{service: service, version: version, namespace: namespace}
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+
+			log.Printf("⚠️ Watcher error: %v", err)
 		}
 	}
 }
@@ -135,31 +189,44 @@ func (d *Daemon) DeployService(job DeployService) {
 	// 	newNamespace, newVersion, lastNamespace, lastVersion)
 
 	if newVersion != lastVersion {
-		// fmt.Printf("[DEPLOYING] %s to %s\n", newVersion, newNamespace)
 
-		// extract {service-name}_{namsepace}.dep
-
-		serviceName, namespace := extractServiceName(depFile)
+		serviceName, namespace, err := extractServiceName(depFile)
+		if err != nil {
+			log.Printf("❌ Invalid filename: %v", err)
+			return
+		}
+		versionAtStart := newVersion
 		err1 := d.DeployTok8s(serviceName, newVersion, namespace)
 		slackengine(err1, serviceName, newVersion, namespace)
 
 		if err1 != nil {
 			fmt.Printf("[ERROR] Deployment failed: %v\n", err1)
+
+			log.Printf("⏸️  Waiting 60 seconds before next attempt...")
+			time.Sleep(60 * time.Second)
+			return
+
 		} else {
+
 			content := newVersion
 			os.WriteFile(lastfile, []byte(content), 0644)
+			log.Printf("✅ Updated .last file to %s", newVersion)
 		}
+		currentVersion := readFile(depFile)
+		if currentVersion != versionAtStart {
+			log.Printf("🔄 File changed during deployment (%s → %s), re-enqueueing",
+				versionAtStart, currentVersion)
 
-		// fmt.Println("[SAVED] Updated .last file")
+			d.jobs <- DeployService{
+				service:   job.service,
+				version:   currentVersion, //suing current version
+				namespace: namespace,
+			}
+		} else {
+			log.Printf("📝 File unchanged, no re-enqueue")
+		}
 	} else {
-		// fmt.Println("[SKIP] No changes detected")
-	}
-
-	//re check for new file
-
-	currentVersion := readFile(depFile)
-	if newVersion != currentVersion {
-		d.jobs <- DeployService{service: job.service, version: newVersion, namespace: job.namespace}
+		log.Printf("⏭️  Skipped: versions already match")
 	}
 
 }
@@ -167,9 +234,7 @@ func (d *Daemon) DeployService(job DeployService) {
 func readFile(filepath string) string {
 	content, err := os.ReadFile(filepath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			_ = os.WriteFile(filepath, []byte(""), 0644)
-		}
+
 		return ""
 	}
 
@@ -215,7 +280,7 @@ func slackengine(err error, serviceName string, newVersion string, newNamespace 
 
 }
 
-func extractServiceName(filePath string) (string, string) {
+func extractServiceName(filePath string) (string, string, error) {
 
 	filename := filepath.Base(filePath)
 	namewithoutExt := strings.TrimSuffix(filename, filepath.Ext(filename))
@@ -224,11 +289,17 @@ func extractServiceName(filePath string) (string, string) {
 
 	if len(parts) != 2 {
 		log.Printf("invalid filename: '%s', expected: {service}_{namespace}.dep", filename)
-		return "", ""
+		return "", "", fmt.Errorf("invalid filename: '%s', expected: {service}_{namespace}.dep", filename)
 	}
 
 	service := parts[0]
 	namespace := parts[1]
 
-	return service, namespace
+	if service == "" || namespace == "" {
+		return "", "", fmt.Errorf(
+			"invalid filename: service and namespace cannot be empty",
+		)
+	}
+
+	return service, namespace, nil
 }

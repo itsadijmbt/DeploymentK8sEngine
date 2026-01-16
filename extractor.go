@@ -35,6 +35,13 @@ func Newk8sclient() (*kubernetes.Clientset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load the k8s config file")
 	}
+
+	// ///////////////////////////////////////
+	// ==== INCREASE RATE LIMITS ====
+	// //////////////////////////////////////
+	config.QPS = 50.0  //default 5
+	config.Burst = 100 // default 10
+
 	//a collection of clients for k8s API groups ->CoreV1(),APPSV1(),BATCHV1()
 	//create a clientset-> a wrapper for k8sapi call + brings in
 	// http client + load certs + rate limits
