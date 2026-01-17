@@ -10,7 +10,7 @@
 
 _A lightweight, concurrency-safe deployment daemon that watches your filesystem and updates Kubernetes in real-time._
 
-[**Explore the Docs**](#-architecture) · [**View Demo**](#-screenshots) · [**Report Bug**](issues)
+[**Explore the Docs**](#-Architecture) · [**View Demo**](#-screenshots) · [**Guide Bug**](#-QuickStart)
 
 </div>
 
@@ -63,7 +63,7 @@ graph TD
     Cluster -->|Pod Status| K8sClient
 ```
 
-# 🚀 Quick Start
+# 🚀 QuickStart
 
 ## Prerequisites
 * **Go 1.21+**
@@ -113,7 +113,7 @@ echo "nginx:1.25.0" > deps/nginx-app_qa-env.dep
 # Manually apply the structural yaml to the new namespace
 kubectl apply -f nginx.yaml -n qa-env
 ```
-## ScreenShots
+## screenshots
 
 1: CORRECT DEPLOYMENT
 
