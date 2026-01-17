@@ -113,7 +113,7 @@ echo "nginx:1.25.0" > deps/nginx-app_qa-env.dep
 # Manually apply the structural yaml to the new namespace
 kubectl apply -f nginx.yaml -n qa-env
 ```
-##ScreenShots
+## ScreenShots
 
 1: CORRECT DEPLOYMENT
 
