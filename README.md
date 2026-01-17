@@ -37,7 +37,7 @@ Unlike generic tools, this engine was **built from scratch** to solve specific d
 |  Atomic Save Safe | Custom **Debounce Logic** handles OS-level "Atomic Save" events (VS Code/Vim) to prevent infinite loops. |
 |  Smart Selectors | Dynamic discovery of Pods using `deployment.Spec.Selector` (no hardcoded label guessing). |
 |  Slack Ops | Real-time, color-coded notifications for Success, Failure, and Timeouts. |
-|  ECR Native | Seamless integration with AWS ECR for private image pulls using K8s Secrets. |
+|  ECR Native | Seamless integration with AWS ECR for private image pulls. |
 
 ---
 
