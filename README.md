@@ -99,3 +99,46 @@ Simply create or edit a file in your ./deps folder. The filename determines the 
 echo "nginx:1.24.3" > deps/nginx-app_default.dep
 ```
 
+🆕 Deploying to New Namespaces (Dynamic Creation)
+1.Create the Dependency File: Define your service and the new namespace you want (e.g., qa-env).
+```bash
+echo "nginx:1.25.0" > deps/nginx-app_qa-env.dep
+```
+2.Auto-Creation: The engine will detect that qa-env is missing and automatically run kubectl create ns qa-env.
+```bash
+⚠️Important: The engine creates the Namespace, but it cannot create the Pods yet because the Deployment manifest does not exist in the new namespace.
+```
+3. Apply Structural YAML: You must provide the base Kubernetes structure (Deployment/Service YAML) for the new namespace.
+```bash
+# Manually apply the structural yaml to the new namespace
+kubectl apply -f nginx.yaml -n qa-env
+```
+
+<div align="center"> <sub>Built with ❤️ and ☕ by Aditya Bhatt</sub> </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
