@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 
-_A lightweight, concurrency-safe deployment daemon that watches your filesystem and updates Kubernetes in real-time._
+_A lightweight, concurrency-safe deployment daemon that watches your filesystem and updates Kubernetes(single cluster support) in real-time._
 
 [**Explore the Docs**](#-Architecture) · [**View Demo**](#-screenshots) · [**Guide**](#-QuickStart)
 
