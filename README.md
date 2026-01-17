@@ -80,16 +80,22 @@ cd DeploymentK8sEngine
 
 2. Configure Environment
 Create a .env file in the root directory:
+```bash
 WEBHOOK_FOR_SLACK=[https://hooks.slack.com/services/YOUR/WEBHOOK](https://hooks.slack.com/services/YOUR/WEBHOOK)
 ECR_REPO=your-account.dkr.ecr.region.amazonaws.com
 DEPS="file-path-to-monitor"
+```
+4. Run the Daemon
+Start the engine to begin watching for file changes:
+```bash
+go run .
+```
 
-3. Run the Daemon
-Start the engine to begin watching for file changes: go run .
 
 Trigger a Deployment
 Simply create or edit a file in your ./deps folder. The filename determines the service and namespace.
+```bash
 # Format: {service}_{namespace}.dep
 echo "nginx:1.24.3" > deps/nginx-app_default.dep
-
+```
 
