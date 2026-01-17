@@ -1,4 +1,3 @@
-<img width="580" height="240" alt="image" src="https://github.com/user-attachments/assets/3b0130fd-9203-4adc-b6fe-1f9ff8d2a5fb" /><div align="center">
 
 #  DeploymentK8sEngine
 ### Event-Driven GitOps Controller built from First Principles in Go
@@ -10,7 +9,7 @@
 
 _A lightweight, concurrency-safe deployment daemon that watches your filesystem and updates Kubernetes in real-time._
 
-[**Explore the Docs**](#-Architecture) · [**View Demo**](#-screenshots) · [**Guide Bug**](#-QuickStart)
+[**Explore the Docs**](#-Architecture) · [**View Demo**](#-screenshots) · [**Guide**](#-QuickStart)
 
 </div>
 
