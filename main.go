@@ -87,6 +87,15 @@ func (d *Daemon) getServiceLocker(service string) *sync.Mutex {
 	}
 	return d.serviceLocks[service]
 }
+func getPATH() (string, error) {
+	path := os.Getenv("DEPS")
+
+	if path == "" {
+		log.Fatal("DEPS environment variable not set")
+		return " ", fmt.Errorf("DEPS environment variable not set")
+	}
+	return path, nil
+}
 
 // the main engine
 func (d *Daemon) watchFiles() {
@@ -97,7 +106,12 @@ func (d *Daemon) watchFiles() {
 	}
 	defer watcher.Close()
 
-	path := "/Users/win 10/Desktop/GO/K8sEngine/deps"
+	path, err := getPATH()
+
+	if err != nil {
+		return
+	}
+
 	err = watcher.Add(path)
 	if err != nil {
 		log.Fatal("Failed to watch folder:", err)
