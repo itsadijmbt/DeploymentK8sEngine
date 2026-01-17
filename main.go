@@ -122,6 +122,8 @@ func (d *Daemon) watchFiles() {
 			if isDep && (isWrite || isCreate) {
 
 				maplock.Lock()
+				// prevents Duplicate Jobs, stops 1 Save from becoming 5 Jobs.
+				//  this is the main fix for the "Loop".
 				lastTime, exists := lastEventTime[event.Name]
 				now := time.Now()
 
@@ -203,7 +205,7 @@ func (d *Daemon) DeployService(job DeployService) {
 			fmt.Printf("[ERROR] Deployment failed: %v\n", err1)
 
 			log.Printf("⏸️  Waiting 60 seconds before next attempt...")
-			time.Sleep(60 * time.Second)
+			time.Sleep(3 * time.Second)
 			return
 
 		} else {

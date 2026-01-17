@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	v1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 )
 
@@ -68,7 +70,7 @@ func (d *Daemon) WaitForRollout(deplyementClients v1.DeploymentInterface, servic
 
 			if status.UnavailableReplicas > 0 {
 				// i.e some replica are failing
-				podErr := d.checkPodErrors(serviceName, deployment.Spec.Selector)
+				podErr := d.checkPodErrors(namespace, deployment.Spec.Selector)
 				if podErr != nil {
 					return fmt.Errorf("rollout failed: %w", podErr)
 				}
@@ -139,49 +141,64 @@ func (d *Daemon) WaitForRollout(deplyementClients v1.DeploymentInterface, servic
 // }
 // checkPodErrors now uses the Official Selector from the deployment
 func (d *Daemon) checkPodErrors(namespace string, labelSelector *metav1.LabelSelector) error {
-    ctx := context.Background()
+	ctx := context.Background()
 
-    
-    selector, err := metav1.LabelSelectorAsSelector(labelSelector)
-    if err != nil {
-        return fmt.Errorf("invalid label selector: %v", err)
-    }
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+	if err != nil {
+		return fmt.Errorf("invalid label selector: %v", err)
+	}
+	targetString := selector.String()
 
-    
-    pods, err := d.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-        LabelSelector: selector.String(),
-    })
+	allpods, err := d.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Printf("❌ CRITICAL: Could not list pods in namespace '%s': %v", namespace, err)
+		return nil
+	}
 
-    if err != nil {
-        log.Printf("Could not list pods: %v", err)
-        return nil
-    }
+	if len(allpods.Items) == 0 {
+		log.Printf(" Namespace appears empty to GoClient %s", namespace)
+		return nil
+	}
 
-    // we find 0 pods, something is very wrong (Deployment exists but no pods?)
-    if len(pods.Items) == 0 {
-        // T log will confirm if we were looking for the wrong thing before
-        log.Printf(" Found 0 pods with selector: %s", selector.String())
-        return nil 
-    }
+	// we find 0 pods, something is very wrong (Deployment exists but no pods?)
+	var matchedPods []corev1.Pod
 
-    for _, pod := range pods.Items {
-       
-        for _, containerStatus := range pod.Status.ContainerStatuses {
-            if containerStatus.State.Waiting != nil {
-                reason := containerStatus.State.Waiting.Reason
-                message := containerStatus.State.Waiting.Message
+	for _, pod := range allpods.Items {
+		podLabel := labels.Set(pod.Labels)
+		if selector.Matches(podLabel) {
+			matchedPods = append(matchedPods, pod)
+		} else {
+			log.Printf("   [MISMATCH] Pod: %s | Has: %v | Wants: %s", pod.Name, pod.Labels, targetString)
+		}
+	}
 
-                if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
-                    return fmt.Errorf("image pull failed: %s - %s", reason, message)
-                }
-                if reason == "CrashLoopBackOff" {
-                    return fmt.Errorf("crash loop: %s", message)
-                }
-                if reason == "InvalidImageName" {
-                    return fmt.Errorf("invalid image name: %s", message)
-                }
-            }
-        }
-    }
-    return nil
+	for _, pod := range matchedPods {
+
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			if containerStatus.State.Waiting != nil {
+				reason := containerStatus.State.Waiting.Reason
+				message := containerStatus.State.Waiting.Message
+
+				if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+					return fmt.Errorf("image pull failed: %s - %s", reason, message)
+				}
+				if reason == "CrashLoopBackOff" {
+					return fmt.Errorf("crash loop: %s", message)
+				}
+				if reason == "InvalidImageName" {
+					return fmt.Errorf("invalid image name: %s", message)
+				}
+				if containerStatus.State.Terminated != nil {
+					exitCode := containerStatus.State.Terminated.ExitCode
+
+					if exitCode != 0 {
+						return fmt.Errorf("Container Terminated with Code %d: %s,", exitCode, containerStatus.State.Terminated.Message)
+					}
+
+				}
+
+			}
+		}
+	}
+	return nil
 }
