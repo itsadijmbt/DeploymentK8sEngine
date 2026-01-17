@@ -52,7 +52,7 @@ graph TD
     subgraph "Deployment Daemon (Go)"
         Deps -->|fsnotify| Watcher[File Watcher]
         Watcher -->|Debounce Logic| Queue[Job Queue Channel]
-        Queue --> Pool[Worker Pool (100)]
+        Queue --> Pool["Worker Pool (100)"]
         
         Pool -->|Lock| Mutex{Per-Service Mutex}
         Mutex -->|Reconcile| K8sClient[K8s Client]
