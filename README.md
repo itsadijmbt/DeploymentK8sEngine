@@ -115,13 +115,13 @@ kubectl apply -f nginx.yaml -n qa-env
 ```
 ScreenShots
 1: CORRECT DEPLOYMENT
+
 <img width="468" height="54" alt="image" src="https://github.com/user-attachments/assets/2f142478-fbb7-4918-a79d-cf04c14fec96" />
 <img width="441" height="46" alt="image" src="https://github.com/user-attachments/assets/f184496c-041a-4b05-b043-216a748309e6" />
 
 2: FAILED DEPLOYMENT
-```bash
-WRONG IMAGE TYPE
-```
+
+
 <img width="424" height="44" alt="image" src="https://github.com/user-attachments/assets/898215a7-3532-4f0e-8335-97931a38db76" />
 <img width="797" height="126" alt="image" src="https://github.com/user-attachments/assets/f371d571-db01-4794-8efc-c12b8a987b94" />
 
