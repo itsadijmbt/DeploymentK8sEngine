@@ -1,4 +1,4 @@
-<div align="center">
+<img width="580" height="240" alt="image" src="https://github.com/user-attachments/assets/3b0130fd-9203-4adc-b6fe-1f9ff8d2a5fb" /><div align="center">
 
 #  DeploymentK8sEngine
 ### Event-Driven GitOps Controller built from First Principles in Go
@@ -113,6 +113,27 @@ echo "nginx:1.25.0" > deps/nginx-app_qa-env.dep
 # Manually apply the structural yaml to the new namespace
 kubectl apply -f nginx.yaml -n qa-env
 ```
+ScreenShots
+1: CORRECT DEPLOYMENT
+<img width="468" height="54" alt="image" src="https://github.com/user-attachments/assets/2f142478-fbb7-4918-a79d-cf04c14fec96" />
+<img width="441" height="46" alt="image" src="https://github.com/user-attachments/assets/f184496c-041a-4b05-b043-216a748309e6" />
+
+2: FAILED DEPLOYMENT
+```bash
+WRONG IMAGE TYPE
+```
+<img width="424" height="44" alt="image" src="https://github.com/user-attachments/assets/898215a7-3532-4f0e-8335-97931a38db76" />
+<img width="797" height="126" alt="image" src="https://github.com/user-attachments/assets/f371d571-db01-4794-8efc-c12b8a987b94" />
+
+3: NAMESPACE FAILURE
+Creates ns with user asking to create file for deployment
+<img width="520" height="51" alt="image" src="https://github.com/user-attachments/assets/d689cb8c-1df3-491b-9ae5-37c6155aaeb5" />
+<img width="723" height="115" alt="image" src="https://github.com/user-attachments/assets/727ca93c-965f-4df3-a901-7e5513b44cb8" />
+<img width="367" height="49" alt="image" src="https://github.com/user-attachments/assets/721288fa-5dba-4ea3-b990-42858cdd1b61" />
+
+
+
+
 
 <div align="center"> <sub>Built with ❤️ and ☕ by Aditya Bhatt</sub> </div>
 
