@@ -31,13 +31,13 @@ Unlike generic tools, this engine was **built from scratch** to solve specific d
 
 | Feature | Description |
 | :--- | :--- |
-| ** Event-Driven** | Zero-latency deployments triggered instantly by `fsnotify` file system events. |
-| ** Thread-Safe** | **Per-service Mutex Locking** ensures no two workers ever fight over the same deployment. |
-| ** High Concurrency** | **Worker Pool Pattern** with 100 concurrent workers and a buffered job queue. |
-| ** Atomic Save Safe** | Custom **Debounce Logic** handles OS-level "Atomic Save" events (VS Code/Vim) to prevent infinite loops. |
-| ** Smart Selectors** | Dynamic discovery of Pods using `deployment.Spec.Selector` (no hardcoded label guessing). |
-| ** Slack Ops** | Real-time, color-coded notifications for Success, Failure, and Timeouts. |
-| ** ECR Native** | Seamless integration with AWS ECR for private image pulls using K8s Secrets. |
+|  Event-Driven | Zero-latency deployments triggered instantly by `fsnotify` file system events. |
+|  Thread-Safe | **Per-service Mutex Locking** ensures no two workers ever fight over the same deployment. |
+|  High Concurrency | **Worker Pool Pattern** with 100 concurrent workers and a buffered job queue. |
+|  Atomic Save Safe | Custom **Debounce Logic** handles OS-level "Atomic Save" events (VS Code/Vim) to prevent infinite loops. |
+|  Smart Selectors | Dynamic discovery of Pods using `deployment.Spec.Selector` (no hardcoded label guessing). |
+|  Slack Ops | Real-time, color-coded notifications for Success, Failure, and Timeouts. |
+|  ECR Native | Seamless integration with AWS ECR for private image pulls using K8s Secrets. |
 
 ---
 
