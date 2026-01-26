@@ -57,9 +57,15 @@ func NewDaemon(worker int) *Daemon {
 func main() {
 
 	err := godotenv.Load()
-
 	if err != nil {
 		log.Println("Warning: .env file not found, using system environment variables")
+		os.Exit(1)
+	}
+	err = ConfigureSystem()
+
+	if err != nil {
+		log.Fatalf("Warning: .env file not found, using system environment variables")
+
 	}
 
 	daemon := NewDaemon(100)
